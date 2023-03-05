@@ -71,15 +71,90 @@ handler.token.post = (requestProperties, callback) => {
 };
 
 handler.token.get = (requestProperties, callback) => {
+    const id = typeof requestProperties.queryStringObject.id === 'string' && requestProperties.queryStringObject.id.trim().length === 20 ? requestProperties.queryStringObject.id : false;
 
+    if (id) {
+        data.read('tokens', id, (err, tokenData) => {
+            const token = { ...parseJSON(tokenData) };
+
+            if (!err && token) {
+                callback(200, token);
+            } else {
+                callback(404, {
+                    Message: 'Token not found!',
+                });
+            }
+        });
+    } else {
+        callback(404, {
+            Message: 'No Token Found!',
+        });
+    }
 };
 
 handler.token.put = (requestProperties, callback) => {
+    const id = typeof requestProperties.body.id === 'string' && requestProperties.body.id.trim().length === 20 ? requestProperties.body.id : false;
+    const extend = !!(typeof requestProperties.body.extend === 'boolean' && requestProperties.body.extend === true);
 
+    if (id && extend) {
+        data.read('tokens', id, (err, tokenData) => {
+            let tokenObject = parseJSON(tokenData);
+
+            if (tokenObject.expires > Date.now()) {
+                tokenObject.expires = Date.now() + 60 * 60 * 1000;
+
+                data.update('tokens', id, tokenObject, (err2) => {
+                    if (!err2) {
+                        callback(200, {
+                            message: 'Token time updated',
+                        });
+                    } else {
+                        callback(500, {
+                            error: 'server error',
+                        });
+                    }
+                });
+            } else {
+                callback(400, {
+                    error: 'Token already expired',
+                });
+            }
+        });
+    } else {
+        callback(400, {
+            error: 'Problem in request',
+        });
+    }
 };
 
 handler.token.delete = (requestProperties, callback) => {
+    const id = typeof requestProperties.queryStringObject.id === 'string' && requestProperties.queryStringObject.id.trim().length === 20 ? requestProperties.queryStringObject.id : false;
 
+    if (id) {
+        data.read('tokens', id, (err, tokenData) => {
+            if (!err && tokenData) {
+                data.delete('tokens', id, (err2) => {
+                    if (!err2) {
+                        callback(200, {
+                            message: 'Token deleted successfully',
+                        });
+                    } else {
+                        callback(500, {
+                            message: 'Problem Occured in server',
+                        });
+                    }
+                });
+            } else {
+                callback(400, {
+                    message: 'Bad request',
+                });
+            }
+        });
+    } else {
+        callback(400, {
+            message: 'Token Does Not Exists',
+        });
+    }
 };
 
 module.exports = handler;
