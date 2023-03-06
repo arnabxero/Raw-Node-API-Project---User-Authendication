@@ -14,6 +14,7 @@
 const { first } = require('lodash');
 const data = require('../../lib/data');
 const { hash, parseJSON } = require('../../helpers/utilities');
+const tokenHandler = require('./tokenHandler');
 
 const handler = {};
 
@@ -83,15 +84,26 @@ handler.users.get = (requestProperties, callback) => {
     const phone = typeof requestProperties.queryStringObject.phone === 'string' && requestProperties.queryStringObject.phone.trim().length === 11 ? requestProperties.queryStringObject.phone : false;
 
     if (phone) {
-        data.read('users', phone, (err, U) => {
-            const user = { ...parseJSON(U) };
+        // Varify token
+        const token = typeof requestProperties.headersObject.token === 'string' ? requestProperties.headersObject.token : false;
 
-            if (!err && user) {
-                delete user.password;
-                callback(200, user);
+        tokenHandler.token.verify(token, phone, (tokenId) => {
+            if (tokenId) {
+                data.read('users', phone, (err, U) => {
+                    const user = { ...parseJSON(U) };
+
+                    if (!err && user) {
+                        delete user.password;
+                        callback(200, user);
+                    } else {
+                        callback(404, {
+                            Message: 'User not found!',
+                        });
+                    }
+                });
             } else {
-                callback(404, {
-                    Message: 'User not found!',
+                callback(403, {
+                    message: 'Requested user not found',
                 });
             }
         });
@@ -101,6 +113,7 @@ handler.users.get = (requestProperties, callback) => {
         });
     }
 };
+
 handler.users.put = (requestProperties, callback) => {
     const firstName = typeof requestProperties.body.firstName === 'string' && requestProperties.body.firstName.trim().length > 0 ? requestProperties.body.firstName : false;
 
@@ -112,36 +125,47 @@ handler.users.put = (requestProperties, callback) => {
 
     if (phone) {
         if (firstName || lastName || password) {
-            data.read('users', phone, (err, uData) => {
-                const userData = JSON.parse(uData);
+            // Varify token
+            const token = typeof requestProperties.headersObject.token === 'string' ? requestProperties.headersObject.token : false;
 
-                if (!err && userData) {
-                    if (firstName) {
-                        userData.firstName = firstName;
-                    }
-                    if (lastName) {
-                        userData.lastName = lastName;
-                    }
-                    if (password) {
-                        userData.password = hash(password);
-                    }
+            tokenHandler.token.verify(token, phone, (tokenId) => {
+                if (tokenId) {
+                    data.read('users', phone, (err, uData) => {
+                        const userData = JSON.parse(uData);
 
-                    console.log(userData);
+                        if (!err && userData) {
+                            if (firstName) {
+                                userData.firstName = firstName;
+                            }
+                            if (lastName) {
+                                userData.lastName = lastName;
+                            }
+                            if (password) {
+                                userData.password = hash(password);
+                            }
 
-                    data.update('users', phone, userData, (err2) => {
-                        if (!err2) {
-                            callback(200, {
-                                Message: 'User Updated Successfully',
+                            console.log(userData);
+
+                            data.update('users', phone, userData, (err2) => {
+                                if (!err2) {
+                                    callback(200, {
+                                        Message: 'User Updated Successfully',
+                                    });
+                                } else {
+                                    callback(500, {
+                                        Error: 'Server Error',
+                                    });
+                                }
                             });
                         } else {
-                            callback(500, {
-                                Error: 'Server Error',
+                            callback(400, {
+                                Error: 'Invalid Request',
                             });
                         }
                     });
                 } else {
-                    callback(400, {
-                        Error: 'Invalid Request',
+                    callback(403, {
+                        message: 'Requested user not found',
                     });
                 }
             });
@@ -161,22 +185,32 @@ handler.users.delete = (requestProperties, callback) => {
     const phone = typeof requestProperties.queryStringObject.phone === 'string' && requestProperties.queryStringObject.phone.trim().length === 11 ? requestProperties.queryStringObject.phone : false;
 
     if (phone) {
-        data.read('users', phone, (err, userData) => {
-            if (!err && userData) {
-                data.delete('users', phone, (err2) => {
-                    if (!err2) {
-                        callback(200, {
-                            message: 'user deleted successfully',
+        const token = typeof requestProperties.headersObject.token === 'string' ? requestProperties.headersObject.token : false;
+
+        tokenHandler.token.verify(token, phone, (tokenId) => {
+            if (tokenId) {
+                data.read('users', phone, (err, userData) => {
+                    if (!err && userData) {
+                        data.delete('users', phone, (err2) => {
+                            if (!err2) {
+                                callback(200, {
+                                    message: 'user deleted successfully',
+                                });
+                            } else {
+                                callback(500, {
+                                    message: 'Problem Occured in server',
+                                });
+                            }
                         });
                     } else {
-                        callback(500, {
-                            message: 'Problem Occured in server',
+                        callback(400, {
+                            message: 'Bad request',
                         });
                     }
                 });
             } else {
-                callback(400, {
-                    message: 'Bad request',
+                callback(403, {
+                    message: 'Requested user not found',
                 });
             }
         });
